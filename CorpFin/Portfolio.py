@@ -1,6 +1,7 @@
 from namedlist import namedlist
 from pandas import DataFrame
 from .Security import Security
+from functools import reduce
 
 
 def val(asset, **kwargs):
@@ -20,7 +21,7 @@ class Portfolio:
              for x in n_assets]
 
     def val(self, **kwargs):
-        return reduce(lambda x, y: x + y, map(lambda x: x.n * val(x.asset, **kwargs), self.c))
+        return reduce(lambda x, y: x + y, [x.n * val(x.asset, **kwargs) for x in self.c])
 
     def __call__(self, **kwargs):
         df = DataFrame(columns=['n', 'asset', 'val'])

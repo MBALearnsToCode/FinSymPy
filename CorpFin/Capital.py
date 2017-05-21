@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function
+
 from copy import copy, deepcopy
 from frozendict import frozendict
 from namedlist import namedlist
@@ -7,6 +7,7 @@ from pandas import DataFrame
 from sympy import Min, Piecewise, Symbol
 from HelpyFuncs.SymPy import sympy_theanify
 from .Security import Security
+from functools import reduce
 
 
 def parse_security_info_set(security_info_set):
@@ -91,8 +92,8 @@ class CapitalStructure:
         if ownerships:
             df = DataFrame(columns=['Owner', 'Security', 'Quantity'])
             i = 0
-            for owner, holdings in self.ownerships.items():
-                for security_label, quantity in holdings.items():
+            for owner, holdings in list(self.ownerships.items()):
+                for security_label, quantity in list(holdings.items()):
                     df.loc[i] = owner, security_label, quantity
                     i += 1
             df.Quantity = df.Quantity.astype(float)
@@ -139,15 +140,13 @@ class CapitalStructure:
 
     def waterfall(self):
         v = Symbol('enterprise_val')
-        for lifo_liquidation_order in reversed(range(len(self))):
+        for lifo_liquidation_order in reversed(list(range(len(self)))):
             security_labels = self[lifo_liquidation_order]
             if lifo_liquidation_order:
                 total_claim_val_this_round = \
                     reduce(
                         lambda x, y: x + y,
-                        map(lambda x: x.n * x.security.claim_val_expr,
-                            map(lambda x: self[x],
-                                security_labels)))
+                        [x.n * x.security.claim_val_expr for x in [self[x] for x in security_labels]])
                 claimable = Min(total_claim_val_this_round, v)
                 for security_label in security_labels:
                     n, security = self[security_label]
@@ -174,7 +173,7 @@ class CapitalStructure:
 
             security_labels_and_quantities = parse_security_info_sets(securities)
 
-            for security_label, quantity in security_labels_and_quantities.items():
+            for security_label, quantity in list(security_labels_and_quantities.items()):
 
                 capital_structure[security_label].n += quantity
 
@@ -202,7 +201,7 @@ class CapitalStructure:
         else:
             security_labels_and_quantities = parse_security_info_sets(securities)
 
-        for security_label, quantity in security_labels_and_quantities.items():
+        for security_label, quantity in list(security_labels_and_quantities.items()):
 
             transferred_quantity = min(capital_structure.ownerships[from_owner][security_label], quantity)
 
@@ -236,8 +235,8 @@ class CapitalStructure:
                     owners=owners,
                     securities=securities)
 
-            for owner, holdings_to_redeem in owners_holdings_to_redeem.items():
-                for security_label, quantity in holdings_to_redeem.items():
+            for owner, holdings_to_redeem in list(owners_holdings_to_redeem.items()):
+                for security_label, quantity in list(holdings_to_redeem.items()):
                     capital_structure[security_label].n -= quantity
                     if allclose(capital_structure[security_label].n, 0.):
                         capital_structure[security_label].n = 0.
@@ -265,8 +264,8 @@ class CapitalStructure:
                     owners=owners,
                     securities=securities)
 
-            for owner, holdings_to_convert in owners_holdings_to_convert.items():
-                for security_label, quantity in holdings_to_convert.items():
+            for owner, holdings_to_convert in list(owners_holdings_to_convert.items()):
+                for security_label, quantity in list(holdings_to_convert.items()):
                     if security_label in capital_structure.optional_conversion_ratios:
                         conversion_ratio = capital_structure.optional_conversion_ratios[security_label]
                         capital_structure.redeem(
@@ -285,7 +284,7 @@ class CapitalStructure:
 
         convertibles = set(self.optional_conversion_ratios)
         conversion_possibilities = set()
-        for owner, holdings in self.ownerships.items():
+        for owner, holdings in list(self.ownerships.items()):
             for security_label in set(holdings) & convertibles:
                 conversion_possibilities.add((owner, security_label))
 
@@ -325,7 +324,7 @@ class CapitalStructure:
 
         else:
 
-            return {frozendict({owners: frozendict(conversions) for owners, conversions in conversions_tried.items()}):
+            return {frozendict({owners: frozendict(conversions) for owners, conversions in list(conversions_tried.items())}):
                     self.copy()}
 
     def val(self, pareto_equil_conversions=False, **kwargs):
@@ -333,27 +332,27 @@ class CapitalStructure:
         if self.optional_conversion_ratios and pareto_equil_conversions:
 
             conversion_scenario_capital_structures = self.conversion_scenarios()
-            conversion_scenarios = conversion_scenario_capital_structures.keys()
+            conversion_scenarios = list(conversion_scenario_capital_structures.keys())
 
             conversion_scenario_val_results = \
                 {conversion_scenario: capital_structure.val(pareto_equil_conversions=False, **kwargs)
-                 for conversion_scenario, capital_structure in conversion_scenario_capital_structures.items()}
+                 for conversion_scenario, capital_structure in list(conversion_scenario_capital_structures.items())}
 
             conversion_scenario_ownership_vals = \
                 {conversion_scenario: val_results['ownership_vals']
-                 for conversion_scenario, val_results in conversion_scenario_val_results.items()}
+                 for conversion_scenario, val_results in list(conversion_scenario_val_results.items())}
 
-            for conversion_scenario, ownership_vals in conversion_scenario_ownership_vals.items():
+            for conversion_scenario, ownership_vals in list(conversion_scenario_ownership_vals.items()):
 
                 pareto = True
 
-                for owner, conversions in conversion_scenario.items():
+                for owner, conversions in list(conversion_scenario.items()):
 
                     for alternative_conversion_scenario in conversion_scenarios:
 
                         pareto_alternative = True
 
-                        for another_owner, another_owner_conversions in alternative_conversion_scenario.items():
+                        for another_owner, another_owner_conversions in list(alternative_conversion_scenario.items()):
                             if another_owner != owner:
                                 pareto_alternative &= \
                                     (conversion_scenario[another_owner] ==
@@ -379,7 +378,7 @@ class CapitalStructure:
 
             convertibles = set(self.optional_conversion_ratios)
             conversion_scenario = {}
-            for owner, holdings in self.ownerships.items():
+            for owner, holdings in list(self.ownerships.items()):
                 for security_label in set(holdings) & convertibles:
                     if owner in conversion_scenario:
                         conversion_scenario[owner][security_label] = False
@@ -391,12 +390,11 @@ class CapitalStructure:
                  for security_label in self.outstanding}
 
             ownership_vals = {}
-            for owner, holdings in self.ownerships.items():
+            for owner, holdings in list(self.ownerships.items()):
                 ownership_vals[owner] = \
                     reduce(
                         lambda x, y: x + y,
-                        map(lambda (security_label, quantity): quantity * security_vals[security_label],
-                            holdings.items()))
+                        [security_label_quantity[1] * security_vals[security_label_quantity[0]] for security_label_quantity in list(holdings.items())])
 
             return dict(
                 conversion_scenario=conversion_scenario,
@@ -412,8 +410,8 @@ class CapitalStructure:
             df = DataFrame(columns=['Owner', 'Security', 'Val', 'Share'])
             common_share_val = capital_structure[self.common_share_label].n * security_vals[self.common_share_label]
             i = 0
-            for owner, holdings in capital_structure.ownerships.items():
-                for security_label, quantity in holdings.items():
+            for owner, holdings in list(capital_structure.ownerships.items()):
+                for security_label, quantity in list(holdings.items()):
                     security_val = quantity * security_vals[security_label]
                     if security_label == self.common_share_label:
                         share_in_common = security_val / common_share_val
@@ -441,7 +439,7 @@ class CapitalStructure:
                     securities = securities,
 
                 for security_label in securities:
-                    for owner, holdings in self.ownerships.items():
+                    for owner, holdings in list(self.ownerships.items()):
                         if security_label in holdings:
                             quantity = holdings[security_label]
                             if owner in d:
@@ -471,7 +469,7 @@ class CapitalStructure:
 
                 if isinstance(securities, dict):
 
-                    for security_label, quantity in securities.items():
+                    for security_label, quantity in list(securities.items()):
                         if security_label in self.ownerships[owner]:
                             d[owner][security_label] = \
                                 min(self.ownerships[owner][security_label], quantity)

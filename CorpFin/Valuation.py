@@ -1,10 +1,12 @@
-from __future__ import absolute_import, division, print_function
+
 from datetime import datetime
 from numpy import nan, isnan
 from pandas import DataFrame
 from sympy import Eq, Expr, Max, Min, Piecewise, Symbol, symbols
 from sympy.printing.theanocode import theano_function
 from HelpyFuncs.SymPy import sympy_eval_by_theano
+import collections
+from functools import reduce
 
 
 def terminal_value(
@@ -42,8 +44,8 @@ class ValModel:   # base class for UnlevValModel & LevValModel below
         self.nb_pro_forma_years_excl_0 = nb_pro_forma_years_excl_0
         self.nb_pro_forma_years_incl_0 = nb_pro_forma_years_excl_0 + 1
         self.final_pro_forma_year = year_0 + nb_pro_forma_years_excl_0
-        self.index_range = range(self.nb_pro_forma_years_incl_0)
-        self.index_range_from_1 = range(1, self.nb_pro_forma_years_incl_0)
+        self.index_range = list(range(self.nb_pro_forma_years_incl_0))
+        self.index_range_from_1 = list(range(1, self.nb_pro_forma_years_incl_0))
 
         # list all Input & Output attributes & symbols, and set model structure
         self.input_attrs = []
@@ -106,7 +108,7 @@ class ValModel:   # base class for UnlevValModel & LevValModel below
             outputs = self.output_attrs
 
         inputs = self.input_defaults.copy()
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             attr = '%s___input' % k
             if hasattr(self, attr):
                 a = getattr(self, attr)
@@ -120,7 +122,7 @@ class ValModel:   # base class for UnlevValModel & LevValModel below
         def calc(x):
             if isinstance(x, (list, tuple)):
                 return [calc(i) for i in x]
-            elif callable(x):
+            elif isinstance(x, collections.Callable):
                 return float(x(**inputs))
             elif (not isinstance(x, Expr)) and isnan(x):
                 return nan
@@ -131,7 +133,7 @@ class ValModel:   # base class for UnlevValModel & LevValModel below
         if isinstance(append_to_results_data_frame, DataFrame):
             df = append_to_results_data_frame
         else:
-            df = DataFrame(index=['Year 0'] + range(self.year_0 + 1, self.final_pro_forma_year + 1))
+            df = DataFrame(index=['Year 0'] + list(range(self.year_0 + 1, self.final_pro_forma_year + 1)))
         print('Calculating:')
         for output in outputs:
             if output in self.output_attrs:
@@ -151,7 +153,7 @@ class ValModel:   # base class for UnlevValModel & LevValModel below
                 if output in kwargs:
                     v = kwargs[output]
                     if isinstance(v, (list, tuple)):
-                        df.ix[range(len(v)), output] = v
+                        df.ix[list(range(len(v))), output] = v
                     elif output in \
                             ('StabilizedBeta', 'StabilizedDiscountRate', 'LongTermGrowthRate', 'TV_RevenueMultiple'):
                         df.loc[self.final_pro_forma_year, output] = v
@@ -813,8 +815,7 @@ class LevValModel(ValModel):
              for i in self.index_range]
 
         self.ITS = \
-            map(lambda x: self.CorpTaxRate___input * x,
-                self.InterestExpense)
+            [self.CorpTaxRate___input * x for x in self.InterestExpense]
 
         # model Interest Tax Shield (ITS) Discount Rate
         self.DebtBeta___input = \
